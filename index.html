@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Anime City Sandbox</title>
+    <style>
+        html, body {
+            margin: 0; padding: 0; overflow: hidden;
+            background: #87CEEB; width: 100vw; height: 100vh;
+            position: fixed; top: 0; left: 0;
+            overscroll-behavior: none; touch-action: none;
+            user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        canvas { display: block; position: fixed; top: 0; left: 0; }
+        #ui-layer { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+        
+        .ui-btn {
+            position: absolute; 
+            background: rgba(40, 40, 40, 0.4); 
+            border: 2px solid rgba(255, 255, 255, 0.6); 
+            border-radius: 50%; 
+            color: white; 
+            display: none; 
+            align-items: center; 
+            justify-content: center; 
+            pointer-events: auto; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); 
+            transition: transform 0.08s, background 0.1s, border 0.2s; 
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            z-index: 20;
+            width: 70px; height: 70px;
+        }
+        .ui-btn:active { transform: scale(0.90); background: rgba(120, 120, 120, 0.7); }
+        .ui-btn svg { width: 60%; height: 60%; fill: white; pointer-events: none; }
+        .ui-btn.active-toggle { background: rgba(0, 150, 255, 0.8); border-color: white; }
+        .ui-btn.editing { border: 2px dashed #ffeb3b; background: rgba(255, 235, 59, 0.2); }
+
+        #fs-btn { top: 20px; left: 20px; width: 45px; height: 45px; display: flex; }
+        #toggle-btn { top: 20px; right: 20px; width: 45px; height: 45px; display: flex; }
+        #edit-btn { top: 20px; left: 75px; width: 45px; height: 45px; display: flex; }
+        
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 8px; height: 8px; background: rgba(255,255,255,0.7); border-radius: 50%;
+            display: none; z-index: 5; box-shadow: 0 0 4px rgba(0,0,0,0.8);
+        }
+
+        #speedometer {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: rgba(0,0,0,0.5); color: white; padding: 5px 15px; border-radius: 10px;
+            font-size: 18px; font-weight: bold; display: none; backdrop-filter: blur(4px);
+            border: 1px solid rgba(255,255,255,0.3); z-index: 20;
+        }
+
+        #cam-area { position: absolute; top: 0; right: 0; width: 60%; height: 100%; pointer-events: auto; display: block; z-index: 1; }
+        
+        #steering-wheel {
+            position: absolute; bottom: 40px; right: 30px; width: 140px; height: 140px;
+            border: 6px solid rgba(255,255,255,0.4); border-radius: 50%;
+            background: rgba(0,0,0,0.2); display: none; pointer-events: auto; z-index: 15;
+            touch-action: none;
+        }
+        #steering-inner {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 50px; height: 50px; background: rgba(255,255,255,0.6); border-radius: 50%;
+        }
+        #steering-spoke {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 100%; height: 8px; background: rgba(255,255,255,0.3); border-radius: 4px;
+        }
+
+        #joystick-base {
+            position: absolute; bottom: 40px; left: 40px; width: 120px; height: 120px;
+            background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%; pointer-events: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 15;
+            backdrop-filter: blur(4px);
+        }
+        #joystick-knob {
+            position: absolute; top: 30px; left: 30px; width: 60px; height: 60px;
+            background: rgba(255,255,255,0.6); border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+        }
+        
+        /* Default Button Positions */
+        #drive-btn { bottom: 40px; right: 190px; }
+        #exit-btn { bottom: 200px; left: 40px; }
+        
+        #sprint-btn { bottom: 130px; right: 30px; }
+        #jump-btn { bottom: 130px; right: 110px; }
+        #punch-btn { bottom: 40px; right: 100px; }
+        
+        #gas-btn { bottom: 40px; left: 160px; }
+        #brake-btn { bottom: 40px; left: 40px; }
+        #boost-btn { bottom: 130px; left: 100px; }
+        #horn-btn { bottom: 130px; left: 180px; }
+
+        #edit-panel {
+            position: absolute; top: 75px; left: 20px; width: 240px; 
+            background: rgba(20, 20, 20, 0.8); color: white; padding: 15px;
+            border-radius: 10px; border: 1px solid rgba(255,255,255,0.3);
+            display: none; z-index: 30; backdrop-filter: blur(4px);
+        }
+        #edit-panel h3 { margin: 0 0 10px 0; font-size: 16px; }
+        #edit-panel label { font-size: 14px; display: block; margin-bottom: 10px; }
+        #edit-panel input[type="range"] { width: 100%; }
+        #edit-toggle-btn {
+            width: 100%; padding: 8px; margin-top: 10px; background: #ff9800; color: white;
+            border: none; border-radius: 5px; font-weight: bold; cursor: pointer;
+        }
+        #edit-toggle-btn.active { background: #f44336; }
+
+        .dialogue-box {
+            position: absolute; background: rgba(255, 255, 255, 0.9); color: black;
+            padding: 5px 10px; border-radius: 10px; font-size: 12px; font-weight: bold;
+            transform: translate(-50%, -100%); pointer-events: none; white-space: nowrap;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2); transition: opacity 0.2s; z-index: 5;
+            opacity: 0;
+        }
+        .dialogue-box::after {
+            content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+            border-width: 6px 6px 0; border-style: solid; border-color: rgba(255, 255, 255, 0.9) transparent transparent transparent;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-layer">
+        <div id="cam-area"></div>
+        <div id="steering-wheel">
+            <div id="steering-spoke"></div>
+            <div id="steering-inner"></div>
+        </div>
+        
+        <div id="crosshair"></div>
+        <div id="speedometer">0 km/h</div>
+        <div id="joystick-base"><div id="joystick-knob"></div></div>
+        
+        <button id="fs-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M7,14H5v5h5v-2H7V14z M19,19h-3v2h5v-5h-2V19z M7,5h3V3H5v5h2V5z M16,3v2h3v3h2V3H16z"/></svg></button>
+        <button id="toggle-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg></button>
+        <button id="edit-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg></button>
+
+        <div id="edit-panel">
+            <h3>UI Customization</h3>
+            <label>Button Scale: <span id="scale-val">100</span>%</label>
+            <input type="range" id="scale-slider" min="50" max="150" value="100">
+            <button id="edit-toggle-btn">Enable Edit Mode</button>
+        </div>
+        
+        <button id="drive-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M18.92,6.01C18.72,5.42,18.16,5,17.5,5h-11C5.84,5,5.29,5.42,5.08,6.01L3,12v8c0,0.55,0.45,1,1,1h1c0.55,0,1-0.45,1-1v-1h12v1c0,0.55,0.45,1,1,1h1c0.55,0,1-0.45,1-1v-8L18.92,6.01z M6.5,16c-0.83,0-1.5-0.67-1.5-1.5S5.67,13,6.5,13S8,13.67,8,14.5S7.33,16,6.5,16z M17.5,16c-0.83,0-1.5-0.67-1.5-1.5s0.67-1.5,1.5-1.5s1.5,0.67,1.5,1.5S18.33,16,17.5,16z M5,11l1.5-4.5h11L19,11H5z"/></svg></button>
+        <button id="sprint-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M13.49,5.48c1.1,0,2-0.9,2-2s-0.9-2-2-2s-2,0.9-2,2S12.39,5.48,13.49,5.48z M9.89,19.38l1-4.4l2.1,2v6h2v-7.5l-2.1-2l0.6-3c1.3,1.5,3.3,2.5,5.5,2.5v-2c-1.9,0-3.5-1-4.3-2.4l-1-1.6c-0.4-0.6-1-1-1.7-1c-0.3,0-0.5,0.1-0.8,0.1l-5.2,2.2v4.7h2v-3.4l1.8-0.7l-1.6,8.1l-4.9-1l-0.4,2l7,1.4z"/></svg></button>
+        <button id="jump-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M12,4l-8,8h5v8h6v-8h5l-8-8z"/></svg></button>
+        <button id="punch-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M23,5.5V20c0,2.2-1.8,4-4,4h-7.3c-1.08,0-2.1-0.43-2.85-1.19L1,14.83c0,0,1.26-1.23,1.3-1.25c0.22-0.19,0.49-0.29,0.79-0.29c0.22,0,0.42,0.06,0.6,0.16L6,15V4c0-1.1,0.9-2,2-2s2,0.9,2,2v6h1V2.5c0-1.1,0.9-2,2-2s2,0.9,2,2V10h1V4c0-1.1,0.9-2,2-2s2,0.9,2,2v6h1V5.5C21.45,4.4,22.35,3.5,23,5.5z"/></svg></button>
+        
+        <button id="exit-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M11,7L9.6,8.4l2.6,2.6H2v2h10.2l-2.6,2.6L11,17l5-5L11,7z M20,19h-8v2h8c1.1,0,2-0.9,2-2V5c0-1.1-0.9-2-2-2h-8v2h8V19z"/></svg></button>
+        <button id="gas-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M20,8h-3V4H3v13h2c0,1.66,1.34,3,3,3s3-1.34,3-3h6c0,1.66,1.34,3,3,3s3-1.34,3-3h2v-5L20,8z M8,18.5c-0.83,0-1.5-0.67-1.5-1.5s0.67-1.5,1.5-1.5s1.5,0.67,1.5,1.5S8.83,18.5,8,18.5z M19,14h-3V9h2.5L19,11.5V14z M18,18.5c-0.83,0-1.5-0.67-1.5-1.5s0.67-1.5,1.5-1.5s1.5,0.67,1.5,1.5S18.83,18.5,18,18.5z"/></svg></button>
+        <button id="brake-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M12,2C6.48,2,2,6.48,2,12c0,5.52,4.48,10,10,10s10-4.48,10-10C22,6.48,17.52,2,12,2z M12,20c-4.41,0-8-3.59-8-8s3.59-8,8-8s8,3.59,8,8S16.41,20,12,20z M15,12c0,1.66-1.34,3-3,3s-3-1.34-3-3s1.34-3,3-3S15,10.34,15,12z"/></svg></button>
+        <button id="boost-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M13,3L4,14h7l-2,7l9-11h-7L13,3z"/></svg></button>
+        <button id="horn-btn" class="ui-btn"><svg viewBox="0 0 24 24"><path d="M12,22c1.1,0,2-0.9,2-2h-4C10,21.1,10.9,22,12,22z M18,16v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-0.83-0.67-1.5-1.5-1.5S10.5,3.17,10.5,4v0.68C7.64,5.36,6,7.92,6,11v5l-2,2v1h16v-1L18,16z"/></svg></button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // --- GLOBALS ---
+        let scene, camera, renderer;
+        let player, car, npcs = [];
+        let state = 'foot';
+        let clock;
+        let buildingColliders = [], houseBounds = [], gatheringPoints = [];
+        let audioCtx, fistMesh, dirLight, hemiLight, sunMesh, carBrakeLights = [];
+        let headlightCones = [];
+        let dialogues = [];
+
+        let joyVec = { x: 0, y: 0 };
+        let camYaw = 0, camPitch = 0.2;
+        let steerCurrentAngle = 0, steerLastAngle = 0;
+        let isSprinting = false, isBoosting = false, isGas = false, isBrake = false;
+        let punchTime = 0, isNight = false, playerVY = 0, isJumping = false;
+        let npcApproaching = null, approachCooldown = 0;
+        let walkDialogueTimer = 0, driveDialogueTimer = 0;
+
+        let joyTouchId = null, lookTouchId = null, steerTouchId = null;
+        let camLastX = 0, camLastY = 0;
+
+        let uiEditMode = false;
+        let dragTarget = null, dragOffsetX = 0, dragOffsetY = 0;
+
+        const driveBtn = document.getElementById('drive-btn');
+        const exitBtn = document.getElementById('exit-btn');
+        const sprintBtn = document.getElementById('sprint-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+        const punchBtn = document.getElementById('punch-btn');
+        const gasBtn = document.getElementById('gas-btn');
+        const brakeBtn = document.getElementById('brake-btn');
+        const boostBtn = document.getElementById('boost-btn');
+        const hornBtn = document.getElementById('horn-btn');
+        const toggleBtn = document.getElementById('toggle-btn');
+        const fsBtn = document.getElementById('fs-btn');
+        const editBtn = document.getElementById('edit-btn');
+        const editPanel = document.getElementById('edit-panel');
+        const scaleSlider = document.getElementById('scale-slider');
+        const scaleVal = document.getElementById('scale-val');
+        const editToggleBtn = document.getElementById('edit-toggle-btn');
+        const camArea = document.getElementById('cam-area');
+        const steeringWheel = document.getElementById('steering-wheel');
+        const crosshair = document.getElementById('crosshair');
+        const speedometer = document.getElementById('speedometer');
+        const joyBase = document.getElementById('joystick-base');
+        const joyKnob = document.getElementById('joystick-knob');
+
+        const walkDialogues = ["Just walking around...", "What a nice city.", "Where is everyone?", "I should get a snack."];
+        const driveDialogues = ["Need for speed!", "Out of my way!", "Vroom vroom!", "Traffic is crazy."];
+        const npcTalkDialogues = ["Hey there!", "Nice weather.", "You new here?", "I'm late for class!"];
+        const npcPunchDialogues = ["Ouch!", "Why I oughta...!", "Rude!", "I'll get you back!"];
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB);
+            scene.fog = new THREE.Fog(0x87CEEB, 150, 400);
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 600);
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+            scene.add(camera);
+            clock = new THREE.Clock();
+
+            setupLights();
+            createWorld();
+            createPlayer();
+            createCar();
+            spawnNPCs(15);
+            setupControls();
+            showFootUI(); 
+            window.addEventListener('resize', onWindowResize, false);
+            animate();
+        }
+
+        function showFootUI() {
+            sprintBtn.style.display = 'flex'; jumpBtn.style.display = 'flex'; punchBtn.style.display = 'flex';
+            crosshair.style.display = 'block'; camArea.style.display = 'block'; joyBase.style.display = 'block';
+            exitBtn.style.display = 'none'; gasBtn.style.display = 'none'; brakeBtn.style.display = 'none';
+            boostBtn.style.display = 'none'; hornBtn.style.display = 'none';
+            steeringWheel.style.display = 'none'; speedometer.style.display = 'none'; driveBtn.style.display = 'none';
+        }
+
+        function showCarUI() {
+            sprintBtn.style.display = 'none'; jumpBtn.style.display = 'none'; punchBtn.style.display = 'none';
+            driveBtn.style.display = 'none'; crosshair.style.display = 'none'; camArea.style.display = 'none'; joyBase.style.display = 'none';
+            exitBtn.style.display = 'flex'; gasBtn.style.display = 'flex'; brakeBtn.style.display = 'flex';
+            boostBtn.style.display = 'flex'; hornBtn.style.display = 'flex';
+            steeringWheel.style.display = 'block'; speedometer.style.display = 'block';
+        }
+
+        function enterFullscreen() {
+            let el = document.documentElement;
+            if (el.requestFullscreen) el.requestFullscreen();
+            else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        }
+
+        function playSound(freq, duration, type = 'sine', vol = 0.5) {
+            if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            let o = audioCtx.createOscillator(), g = audioCtx.createGain();
+            o.connect(g); g.connect(audioCtx.destination);
+            o.type = type; o.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            g.gain.setValueAtTime(vol, audioCtx.currentTime);
+            g.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            o.start(); o.stop(audioCtx.currentTime + duration);
+        }
+
+        function setupLights() {
+            hemiLight = new THREE.HemisphereLight(0xffffff, 0x88aa66, 0.9); scene.add(hemiLight);
+            dirLight = new THREE.DirectionalLight(0xfff4e6, 1.0); dirLight.position.set(80, 120, 50);
+            dirLight.castShadow = true; dirLight.shadow.mapSize.width = 1024; dirLight.shadow.mapSize.height = 1024;
+            dirLight.shadow.camera.left = -120; dirLight.shadow.camera.right = 120; dirLight.shadow.camera.top = 120; dirLight.shadow.camera.bottom = -120; dirLight.shadow.camera.far = 400;
+            scene.add(dirLight);
+            let sunMat = new THREE.MeshBasicMaterial({ color: 0xfff59d, fog: false });
+            sunMesh = new THREE.Mesh(new THREE.SphereGeometry(20, 8, 8), sunMat);
+            sunMesh.position.set(100, 100, -150); scene.add(sunMesh);
+        }
+
+        function isInsideHouse(x, z) { for (let b of houseBounds) { if (x > b.min.x && x < b.max.x && z > b.min.z && z < b.max.z) return true; } return false; }
+
+        function createWorld() {
+            let ground = new THREE.Mesh(new THREE.PlaneGeometry(600, 600), new THREE.MeshStandardMaterial({ color: 0x8fc03f }));
+            ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+            let roadMat = new THREE.MeshStandardMaterial({ color: 0x555555 }), pathMat = new THREE.MeshStandardMaterial({ color: 0x999999 });
+            let buildingColors = [0xffe5b4, 0xfdfd96, 0xc19a6b, 0xe2725b, 0xffffff, 0xfffacd], wallMat = new THREE.MeshStandardMaterial({ color: 0x424242 });
+            let gridSize = 80, bSize = 30, cityLimit = 180;
+            for (let x = -cityLimit; x <= cityLimit; x += gridSize) {
+                for (let z = -cityLimit; z <= cityLimit; z += gridSize) {
+                    let road = new THREE.Mesh(new THREE.BoxGeometry(gridSize - bSize, 0.2, gridSize - bSize), roadMat);
+                    road.position.set(x, 0.1, z); road.receiveShadow = true; scene.add(road);
+                    let path = new THREE.Mesh(new THREE.BoxGeometry(gridSize - bSize + 4, 0.4, gridSize - bSize + 4), pathMat);
+                    path.position.set(x, 0.1, z); path.receiveShadow = true; scene.add(path);
+                    if (Math.random() > 0.2) { createHouse(x, z, bSize, 10 + Math.random() * 25, buildingColors[Math.floor(Math.random() * buildingColors.length)]); } 
+                    else { createTree(x + (Math.random()*10-5), z + (Math.random()*10-5)); if(Math.random() > 0.7) gatheringPoints.push(new THREE.Vector3(x, 0, z)); }
+                }
+            }
+            for(let i=0; i<40; i++) { let tx = Math.random() * 300 - 150, tz = Math.random() * 300 - 150; if (!isInsideHouse(tx, tz)) createTree(tx, tz); }
+            let wallH = 15, wallT = 5, wallL = cityLimit * 2 + 20, wallY = wallH / 2;
+            let walls = [new THREE.Mesh(new THREE.BoxGeometry(wallL, wallH, wallT), wallMat), new THREE.Mesh(new THREE.BoxGeometry(wallL, wallH, wallT), wallMat), new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, wallL), wallMat), new THREE.Mesh(new THREE.BoxGeometry(wallT, wallH, wallL), wallMat)];
+            walls[0].position.set(0, wallY, -cityLimit - 10); walls[1].position.set(0, wallY, cityLimit + 10);
+            walls[2].position.set(cityLimit + 10, wallY, 0); walls[3].position.set(-cityLimit - 10, wallY, 0);
+            walls.forEach(w => { scene.add(w); buildingColliders.push(new THREE.Box3().setFromObject(w)); });
+        }
+
+        function createHouse(x, z, size, h, color) {
+            let house = new THREE.Group();
+            let wallMat = new THREE.MeshStandardMaterial({ color: color }), roofMat = new THREE.MeshStandardMaterial({ color: 0x444444 });
+            let windowMat = new THREE.MeshStandardMaterial({ color: 0x81d4fa, emissive: 0xffffaa, emissiveIntensity: 0.6 });
+            let interiorMat = new THREE.MeshStandardMaterial({ color: 0x333333, emissive: 0x444422, emissiveIntensity: 0.2 });
+            let t = 0.5, doorW = 4, doorH = 4;
+            let frontL = new THREE.Mesh(new THREE.BoxGeometry(size/2 - doorW/2, h, t), wallMat); frontL.position.set(-(size/4 + doorW/4), h/2, -size/2); house.add(frontL);
+            let frontR = new THREE.Mesh(new THREE.BoxGeometry(size/2 - doorW/2, h, t), wallMat); frontR.position.set((size/4 + doorW/4), h/2, -size/2); house.add(frontR);
+            let frontTop = new THREE.Mesh(new THREE.BoxGeometry(doorW, h - doorH, t), wallMat); frontTop.position.set(0, doorH + (h-doorH)/2, -size/2); house.add(frontTop);
+            let back = new THREE.Mesh(new THREE.BoxGeometry(size, h, t), wallMat); back.position.set(0, h/2, size/2); house.add(back);
+            let left = new THREE.Mesh(new THREE.BoxGeometry(t, h, size), wallMat); left.position.set(-size/2, h/2, 0); house.add(left);
+            let right = new THREE.Mesh(new THREE.BoxGeometry(t, h, size), wallMat); right.position.set(size/2, h/2, 0); house.add(right);
+            let floor = new THREE.Mesh(new THREE.BoxGeometry(size - t*2, 0.2, size - t*2), interiorMat); floor.position.set(0, 0.1, 0); house.add(floor);
+            let roof = new THREE.Mesh(new THREE.BoxGeometry(size+1, 1, size+1), roofMat); roof.position.set(0, h+0.5, 0); house.add(roof);
+            [[-size/2, h/2, -size/4], [-size/2, h/2, size/4], [size/2, h/2, -size/4], [size/4, h/2, size/2]].forEach(p => { let win = new THREE.Mesh(new THREE.BoxGeometry(t*1.1, 1.5, 1.5), windowMat); win.position.set(p[0], p[1], p[2]); house.add(win); });
+            house.position.set(x, 0, z); scene.add(house);
+            [frontL, frontR, frontTop, back, left, right].forEach(m => { let box = new THREE.Box3().setFromObject(m); box.applyMatrix4(house.matrixWorld); buildingColliders.push(box); });
+            houseBounds.push(new THREE.Box3(new THREE.Vector3(x - size/2, 0, z - size/2), new THREE.Vector3(x + size/2, 0, z + size/2)));
+        }
+
+        function createTree(x, z) {
+            let tree = new THREE.Group(), trunkH = 3 + Math.random() * 4, trunkW = 0.8 + Math.random() * 0.6;
+            let trunk = new THREE.Mesh(new THREE.BoxGeometry(trunkW, trunkH, trunkW), new THREE.MeshStandardMaterial({ color: 0x8d6e63 }));
+            trunk.position.y = trunkH / 2; tree.add(trunk);
+            let greenHues = [0x76c043, 0x8bc34a, 0xaed581, 0x689f38, 0x558b2f];
+            let layers = 3 + Math.floor(Math.random() * 3), currentY = trunkH;
+            for(let i=0; i<layers; i++) { let size = (layers - i) * 1.5 + Math.random() * 1.5; let box = new THREE.Mesh(new THREE.BoxGeometry(size, size * 0.8, size), new THREE.MeshStandardMaterial({ color: greenHues[Math.floor(Math.random() * greenHues.length)] })); box.position.y = currentY + size * 0.4; tree.add(box); currentY += size * 0.8; }
+            tree.position.set(x, 0, z); scene.add(tree);
+        }
+
+        function createPlayer() {
+            player = new THREE.Group(); player.visible = false; player.position.set(0, 0, 20); scene.add(player);
+            fistMesh = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.4), new THREE.MeshStandardMaterial({ color: 0xffdbac }));
+            fistMesh.position.set(0.4, -0.3, -0.8); camera.add(fistMesh);
+        }
+
+        function createCar() {
+            car = new THREE.Group();
+            let bodyMat = new THREE.MeshStandardMaterial({ color: 0xd32f2f }), glassMat = new THREE.MeshStandardMaterial({ color: 0x37474f }), wheelMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+            let lower = new THREE.Mesh(new THREE.BoxGeometry(2, 1, 4), bodyMat); lower.position.y = 0.8; car.add(lower);
+            let cabin = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1, 2), bodyMat); cabin.position.set(0, 1.8, -0.2); car.add(cabin);
+            let ws = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.8, 1), glassMat); ws.position.set(0, 1.8, 0.8); car.add(ws);
+            let rw = new THREE.Mesh(new THREE.BoxGeometry(1.85, 0.8, 1), glassMat); rw.position.set(0, 1.8, -1.2); car.add(rw);
+            
+            // Headlight Cones (Translucent low-poly beams)
+            let coneMat = new THREE.MeshBasicMaterial({ color: 0xffffaa, transparent: true, opacity: 0.2, side: THREE.DoubleSide });
+            let cone1 = new THREE.Mesh(new THREE.ConeGeometry(3, 12, 4, 1, true), coneMat);
+            cone1.rotation.x = -Math.PI / 2; 
+            cone1.position.set(-0.6, 0.8, -8); 
+            car.add(cone1);
+            let cone2 = new THREE.Mesh(new THREE.ConeGeometry(3, 12, 4, 1, true), coneMat);
+            cone2.rotation.x = -Math.PI / 2; 
+            cone2.position.set(0.6, 0.8, -8); 
+            car.add(cone2);
+            headlightCones.push(cone1, cone2);
+            headlightCones.forEach(c => c.visible = false);
+            
+            // Brake Lights
+            let bl1 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.1), new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0x330000 })); bl1.position.set(-0.6, 0.8, 2.01); car.add(bl1);
+            let bl2 = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.2, 0.1), new THREE.MeshStandardMaterial({ color: 0x330000, emissive: 0x330000 })); bl2.position.set(0.6, 0.8, 2.01); car.add(bl2);
+            carBrakeLights.push(bl1, bl2);
+            
+            let wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 8);
+            [[-1.1, 0.5, 1.3], [1.1, 0.5, 1.3], [-1.1, 0.5, -1.3], [1.1, 0.5, -1.3]].forEach(pos => { let w = new THREE.Mesh(wheelGeo, wheelMat); w.rotation.z = Math.PI / 2; w.position.set(pos[0], pos[1], pos[2]); car.add(w); });
+            car.position.set(5, 0, 20); car.userData = { speed: 0 }; scene.add(car);
+        }
+
+        function spawnNPCs(count) {
+            let npcColors = [0xff5722, 0x2196f3, 0x9c27b0, 0x4caf50, 0xffeb3b];
+            for (let i = 0; i < count; i++) {
+                let npc = new THREE.Group(), c = npcColors[Math.floor(Math.random() * npcColors.length)];
+                let skin = new THREE.MeshStandardMaterial({ color: 0xffdbac }), cloth = new THREE.MeshStandardMaterial({ color: c }), legs = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                let torso = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.4), cloth); torso.position.y = 1.4; npc.add(torso);
+                let head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skin); head.position.y = 2.1; npc.add(head);
+                let legL = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.9, 0.25), legs); legL.position.set(-0.15, 0.45, 0); npc.add(legL);
+                let legR = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.9, 0.25), legs); legR.position.set(0.15, 0.45, 0); npc.add(legR);
+                let armL = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), cloth); armL.position.set(-0.45, 1.45, 0); npc.add(armL);
+                let armR = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.8, 0.2), cloth); armR.position.set(0.45, 1.45, 0); npc.add(armR);
+                npc.position.set(Math.random() * 200 - 100, 0, Math.random() * 200 - 100);
+                npc.userData = { state: 'walking', target: new THREE.Vector3(Math.random() * 150 - 75, 0, Math.random() * 150 - 75), speed: 0.02 + Math.random() * 0.02, legL, legR, armL, armR, walkPhase: Math.random() * Math.PI * 2, stunTime: 0, knockDir: new THREE.Vector3(), talkTime: 0 };
+                scene.add(npc); npcs.push(npc);
+            }
+        }
+
+        function resolveCollisions(entity, radius) {
+            let pos = entity.position;
+            for (let i = 0; i < buildingColliders.length; i++) {
+                let box = buildingColliders[i], center = box.getCenter(new THREE.Vector3());
+                if (pos.distanceTo(center) > 40) continue; 
+                let cx = Math.max(box.min.x, Math.min(pos.x, box.max.x)), cz = Math.max(box.min.z, Math.min(pos.z, box.max.z));
+                let dx = pos.x - cx, dz = pos.z - cz, distSq = dx*dx + dz*dz;
+                if (distSq < radius * radius) { let dist = Math.sqrt(distSq); if (dist === 0) { pos.x += radius; } else { let push = (radius - dist); pos.x += (dx/dist) * push; pos.z += (dz/dist) * push; } }
+            }
+        }
+
+        function createDialogue(text, entity) {
+            let el = document.createElement('div');
+            el.className = 'dialogue-box'; el.innerText = text;
+            document.getElementById('ui-layer').appendChild(el);
+            let d = { el, entity, time: 3.0 }; dialogues.push(d);
+            setTimeout(() => { el.style.opacity = 1; }, 10);
+        }
+
+        function updateDialogues(dt) {
+            let vec = new THREE.Vector3();
+            for (let i = dialogues.length - 1; i >= 0; i--) {
+                let d = dialogues[i]; d.time -= dt;
+                if (d.time <= 0) { d.el.style.opacity = 0; setTimeout(() => { d.el.remove(); }, 200); dialogues.splice(i, 1); continue; }
+                vec.copy(d.entity.position).add(new THREE.Vector3(0, 2.8, 0)); vec.project(camera);
+                let x = (vec.x * 0.5 + 0.5) * window.innerWidth, y = (-vec.y * 0.5 + 0.5) * window.innerHeight;
+                d.el.style.left = x + 'px'; d.el.style.top = y + 'px'; d.el.style.opacity = (vec.z > 1) ? 0 : 1;
+            }
+        }
+
+        // --- CONTROLS ---
+        function bindActionBtn(id, onDown, onUp) {
+            const el = document.getElementById(id);
+            const down = (e) => {
+                if (uiEditMode) return;
+                e.preventDefault(); e.stopPropagation();
+                if(onDown) onDown();
+                window.addEventListener('touchend', up, {passive: false});
+                window.addEventListener('touchcancel', up, {passive: false});
+                window.addEventListener('mouseup', up);
+            };
+            const up = (e) => {
+                if (uiEditMode) return;
+                if (e) { e.preventDefault(); e.stopPropagation(); }
+                if(onUp) onUp();
+                window.removeEventListener('touchend', up);
+                window.removeEventListener('touchcancel', up);
+                window.removeEventListener('mouseup', up);
+            };
+            el.addEventListener('touchstart', down, {passive: false});
+            el.addEventListener('mousedown', down);
+        }
+        function bindToggleBtn(id, action) {
+            const el = document.getElementById(id);
+            const click = (e) => { if (uiEditMode && id !== 'edit-toggle-btn') return; e.preventDefault(); e.stopPropagation(); action(); };
+            el.addEventListener('touchstart', click, {passive: false}); el.addEventListener('mousedown', click);
+        }
+
+        function setupControls() {
+            bindToggleBtn('fs-btn', enterFullscreen);
+            bindToggleBtn('toggle-btn', toggleDayNight);
+            bindToggleBtn('drive-btn', () => toggleDrive());
+            bindToggleBtn('exit-btn', () => toggleDrive());
+            bindToggleBtn('horn-btn', () => playSound(440, 0.2, 'square', 0.3));
+            bindToggleBtn('punch-btn', punch);
+            bindToggleBtn('jump-btn', jump);
+            
+            // Sprint Toggle
+            bindToggleBtn('sprint-btn', () => {
+                isSprinting = !isSprinting;
+                sprintBtn.classList.toggle('active-toggle', isSprinting);
+            });
+            
+            // Gas & Brake
+            bindActionBtn('gas-btn', () => isGas = true, () => isGas = false);
+            bindActionBtn('brake-btn', () => isBrake = true, () => isBrake = false);
+            bindActionBtn('boost-btn', () => isBoosting = true, () => isBoosting = false);
+
+            // Edit Panel
+            editBtn.addEventListener('touchstart', (e) => { e.preventDefault(); e.stopPropagation(); editPanel.style.display = editPanel.style.display === 'block' ? 'none' : 'block'; }, {passive: false});
+            editBtn.addEventListener('mousedown', (e) => { e.stopPropagation(); editPanel.style.display = editPanel.style.display === 'block' ? 'none' : 'block'; });
+            
+            scaleSlider.addEventListener('input', (e) => {
+                let scale = e.target.value / 100; scaleVal.innerText = e.target.value;
+                document.querySelectorAll('.ui-btn').forEach(btn => {
+                    if (btn.id === 'fs-btn' || btn.id === 'toggle-btn' || btn.id === 'edit-btn') return;
+                    let defaultSize = 70, newSize = defaultSize * scale;
+                    btn.style.width = newSize + 'px'; btn.style.height = newSize + 'px';
+                });
+            });
+            editToggleBtn.addEventListener('click', () => {
+                uiEditMode = !uiEditMode;
+                if (uiEditMode) {
+                    editToggleBtn.innerText = "Save Layout"; editToggleBtn.classList.add('active');
+                    document.querySelectorAll('.ui-btn').forEach(btn => {
+                        if (btn.id === 'fs-btn' || btn.id === 'toggle-btn' || btn.id === 'edit-btn' || btn.style.display === 'none') return;
+                        btn.classList.add('editing');
+                    });
+                } else {
+                    editToggleBtn.innerText = "Enable Edit Mode"; editToggleBtn.classList.remove('active');
+                    document.querySelectorAll('.ui-btn').forEach(btn => btn.classList.remove('editing'));
+                }
+            });
+
+            // Global Touch Handlers
+            window.addEventListener('touchstart', (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    let t = e.changedTouches[i];
+                    let target = document.elementFromPoint(t.clientX, t.clientY);
+                    if (!target) continue;
+
+                    if (uiEditMode) {
+                        if (target.closest('.ui-btn.editing')) {
+                            dragTarget = target.closest('.ui-btn');
+                            let rect = dragTarget.getBoundingClientRect();
+                            dragOffsetX = t.clientX - rect.left; dragOffsetY = t.clientY - rect.top;
+                            dragTarget.style.bottom = 'auto'; dragTarget.style.right = 'auto';
+                            continue;
+                        }
+                    } else {
+                        if (target.closest('#joystick-base') && joyTouchId === null && state === 'foot') { joyTouchId = t.identifier; handleJoyMove(t.clientX, t.clientY); } 
+                        else if (target.closest('#steering-wheel') && steerTouchId === null && state === 'driving') { steerTouchId = t.identifier; let rect = steeringWheel.getBoundingClientRect(); steerLastAngle = Math.atan2(t.clientY - (rect.top + rect.height/2), t.clientX - (rect.left + rect.width/2)); } 
+                        else if (target.closest('#cam-area') && lookTouchId === null && state === 'foot') { lookTouchId = t.identifier; camLastX = t.clientX; camLastY = t.clientY; }
+                    }
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    let t = e.changedTouches[i];
+                    if (uiEditMode && dragTarget && t.identifier === 0) {
+                        dragTarget.style.left = (t.clientX - dragOffsetX) + 'px'; dragTarget.style.top = (t.clientY - dragOffsetY) + 'px';
+                    } else {
+                        if (t.identifier === joyTouchId) handleJoyMove(t.clientX, t.clientY);
+                        else if (t.identifier === steerTouchId) handleSteerMove(t.clientX, t.clientY);
+                        else if (t.identifier === lookTouchId) handleLookMove(t.clientX, t.clientY);
+                    }
+                }
+                e.preventDefault();
+            }, { passive: false });
+
+            window.addEventListener('touchend', (e) => {
+                for (let i = 0; i < e.changedTouches.length; i++) {
+                    let t = e.changedTouches[i];
+                    if (t.identifier === joyTouchId) { joyTouchId = null; joyVec = { x: 0, y: 0 }; joyKnob.style.left = '30px'; joyKnob.style.top = '30px'; } 
+                    else if (t.identifier === steerTouchId) steerTouchId = null; 
+                    else if (t.identifier === lookTouchId) lookTouchId = null;
+                }
+                if (uiEditMode) dragTarget = null;
+            });
+
+            // Mouse Fallbacks
+            joyBase.addEventListener('mousedown', (e) => { if(!uiEditMode && state==='foot'){ joyTouchId = -1; handleJoyMove(e.clientX, e.clientY); } });
+            window.addEventListener('mousemove', (e) => {
+                if (uiEditMode && dragTarget) { dragTarget.style.left = (e.clientX - dragOffsetX) + 'px'; dragTarget.style.top = (e.clientY - dragOffsetY) + 'px'; return; }
+                if (joyTouchId === -1) handleJoyMove(e.clientX, e.clientY);
+                if (lookTouchId === -1 && state === 'foot') handleLookMove(e.clientX, e.clientY);
+            });
+            window.addEventListener('mouseup', () => { if (joyTouchId === -1) { joyTouchId = null; joyVec = { x: 0, y: 0 }; joyKnob.style.left = '30px'; joyKnob.style.top = '30px'; } lookTouchId = null; if(uiEditMode) dragTarget = null; });
+            camArea.addEventListener('mousedown', (e) => { if(state === 'foot' && !uiEditMode){ lookTouchId = -1; camLastX = e.clientX; camLastY = e.clientY; } });
+            document.querySelectorAll('.ui-btn').forEach(btn => {
+                btn.addEventListener('mousedown', (e) => {
+                    if (uiEditMode && btn.classList.contains('editing')) {
+                        dragTarget = btn; let rect = btn.getBoundingClientRect();
+                        dragOffsetX = e.clientX - rect.left; dragOffsetY = e.clientY - rect.top;
+                        btn.style.bottom = 'auto'; btn.style.right = 'auto';
+                    }
+                });
+            });
+        }
+
+        function handleJoyMove(cx, cy) { let rect = joyBase.getBoundingClientRect(); let dx = cx - (rect.left + rect.width / 2), dy = cy - (rect.top + rect.height / 2); let dist = Math.sqrt(dx*dx + dy*dy), maxDist = rect.width / 2; if (dist > maxDist) { dx = (dx/dist)*maxDist; dy = (dy/dist)*maxDist; } joyKnob.style.left = (30 + dx) + 'px'; joyKnob.style.top = (30 + dy) + 'px'; joyVec.x = dx/maxDist; joyVec.y = dy/maxDist; }
+        function handleLookMove(cx, cy) { let dx = cx - camLastX, dy = cy - camLastY; camLastX = cx; camLastY = cy; camYaw -= dx * 0.005; camPitch -= dy * 0.005; camPitch = Math.max(-1.2, Math.min(1.2, camPitch)); }
+        function handleSteerMove(cx, cy) { let rect = steeringWheel.getBoundingClientRect(); let dx = cx - (rect.left + rect.width/2), dy = cy - (rect.top + rect.height/2); let angle = Math.atan2(dy, dx); let delta = angle - steerLastAngle; if (delta > Math.PI) delta -= Math.PI*2; if (delta < -Math.PI) delta += Math.PI*2; steerCurrentAngle += delta; steerCurrentAngle = Math.max(-Math.PI/2, Math.min(Math.PI/2, steerCurrentAngle)); steerLastAngle = angle; steeringWheel.style.transform = `rotate(${steerCurrentAngle}rad)`; }
+
+        function toggleDayNight() {
+            isNight = !isNight;
+            if (isNight) { scene.background = new THREE.Color(0x0a0a20); scene.fog.color = new THREE.Color(0x0a0a20); hemiLight.intensity = 0.3; dirLight.intensity = 0.4; sunMesh.material.color.set(0xffffff); headlightCones.forEach(c => c.visible = true); } 
+            else { scene.background = new THREE.Color(0x87CEEB); scene.fog.color = new THREE.Color(0x87CEEB); hemiLight.intensity = 0.9; dirLight.intensity = 1.0; sunMesh.material.color.set(0xfff59d); headlightCones.forEach(c => c.visible = false); }
+        }
+
+        function toggleDrive() {
+            if (state === 'foot') { if (player.position.distanceTo(car.position) < 8) { state = 'driving'; showCarUI(); } } 
+            else { state = 'foot'; let exitPos = new THREE.Vector3(2.5, 0, 0); exitPos.applyAxisAngle(new THREE.Vector3(0,1,0), car.rotation.y); player.position.copy(car.position).add(exitPos); player.position.y = 0; showFootUI(); }
+        }
+
+        function punch() {
+            if (state !== 'foot' || punchTime > 0) return;
+            punchTime = 0.3; playSound(150, 0.15, 'sine', 0.5);
+            let forward = new THREE.Vector3(); camera.getWorldDirection(forward); forward.y = 0; forward.normalize();
+            npcs.forEach(npc => {
+                if (npc.userData.state !== 'stunned') {
+                    let toNpc = new THREE.Vector3().subVectors(npc.position, player.position); let dist = toNpc.length();
+                    if (dist < 2.5) { toNpc.normalize(); if (forward.dot(toNpc) > 0.6) { npc.userData.state = 'stunned'; npc.userData.stunTime = 1.0; npc.userData.knockDir = toNpc.clone().multiplyScalar(1.5); createDialogue(npcPunchDialogues[Math.floor(Math.random() * npcPunchDialogues.length)], npc); if (npcApproaching === npc) { npcApproaching = null; approachCooldown = 20; } } }
+                }
+            });
+        }
+
+        function jump() { if (state === 'foot' && !isJumping) { isJumping = true; playerVY = 0.3; } }
+
+        const CITY_LIMIT = 175;
+        function updatePlayer(dt) {
+            if (state !== 'foot') return;
+            let moveSpeed = isSprinting ? 0.35 : 0.15;
+            let forward = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw)), right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
+            let moveDir = new THREE.Vector3(); moveDir.addScaledVector(forward, -joyVec.y); moveDir.addScaledVector(right, joyVec.x);
+            let isMoving = moveDir.lengthSq() > 0;
+            if (isMoving) {
+                moveDir.normalize().multiplyScalar(moveSpeed); player.position.add(moveDir);
+                walkDialogueTimer -= dt;
+                if (walkDialogueTimer <= 0) { createDialogue(walkDialogues[Math.floor(Math.random() * walkDialogues.length)], player); walkDialogueTimer = 10 + Math.random() * 10; }
+            }
+            if (isJumping) { playerVY -= 0.015; player.position.y += playerVY; if (player.position.y <= 0) { player.position.y = 0; isJumping = false; playerVY = 0; } }
+            resolveCollisions(player, 0.5);
+            player.position.x = Math.max(-CITY_LIMIT, Math.min(CITY_LIMIT, player.position.x)); player.position.z = Math.max(-CITY_LIMIT, Math.min(CITY_LIMIT, player.position.z));
+            camera.position.set(player.position.x, 1.7 + player.position.y, player.position.z); camera.rotation.set(camPitch, camYaw, 0, 'YXZ');
+            if (punchTime > 0) { punchTime -= dt; let pp = 1 - (punchTime / 0.3); fistMesh.position.z = -0.8 - Math.sin(pp * Math.PI) * 0.6; fistMesh.position.y = -0.3 + Math.sin(pp * Math.PI) * 0.1; } 
+            else { fistMesh.position.z = -0.8; fistMesh.position.y = -0.3 - (player.position.y * 0.5); }
+            if (player.position.distanceTo(car.position) < 8) driveBtn.style.display = 'flex'; else if (state === 'foot') driveBtn.style.display = 'none';
+        }
+
+        function updateCar(dt) {
+            if (state !== 'driving') return;
+            let maxSpeed = isBoosting ? 2.0 : 1.0, accel = isBoosting ? 0.05 : 0.02;
+            
+            // Gas and Brake Logic
+            if (isGas) { car.userData.speed += accel; }
+            if (isBrake) { car.userData.speed -= accel; }
+            if (!isGas && !isBrake) { car.userData.speed *= 0.98; } // Natural friction
+            
+            car.userData.speed = Math.max(-maxSpeed/2, Math.min(maxSpeed, car.userData.speed));
+            
+            let steerInput = steerCurrentAngle / (Math.PI/2); 
+            if (Math.abs(car.userData.speed) > 0.05) car.rotation.y -= steerInput * 0.025 * Math.sign(car.userData.speed);
+            if (steerTouchId === null) { steerCurrentAngle *= 0.9; steeringWheel.style.transform = `rotate(${steerCurrentAngle}rad)`; }
+            
+            let forward = new THREE.Vector3(-Math.sin(car.rotation.y), 0, -Math.cos(car.rotation.y)); 
+            car.position.addScaledVector(forward, car.userData.speed); car.position.y = 0;
+            resolveCollisions(car, 1.5); car.position.x = Math.max(-CITY_LIMIT, Math.min(CITY_LIMIT, car.position.x)); car.position.z = Math.max(-CITY_LIMIT, Math.min(CITY_LIMIT, car.position.z));
+            
+            // Lights Logic
+            let isBraking = isBrake && car.userData.speed > 0;
+            let isReversing = car.userData.speed < 0;
+            carBrakeLights.forEach(l => l.material.emissive.setHex(isReversing ? 0xffffff : (isBraking ? 0xff0000 : 0x330000)));
+            speedometer.innerText = Math.abs(car.userData.speed * 30).toFixed(0) + " km/h";
+            
+            driveDialogueTimer -= dt;
+            if (Math.abs(car.userData.speed) > 0.5 && driveDialogueTimer <= 0) { createDialogue(driveDialogues[Math.floor(Math.random() * driveDialogues.length)], player); driveDialogueTimer = 10 + Math.random() * 10; }
+
+            let camDist = 8, camHeight = 4, offsetX = camDist * Math.sin(car.rotation.y), offsetZ = camDist * Math.cos(car.rotation.y);
+            camera.position.x = car.position.x + offsetX; camera.position.y = car.position.y + camHeight; camera.position.z = car.position.z + offsetZ; camera.lookAt(car.position.x, car.position.y + 1, car.position.z);
+        }
+
+        function updateNPCs(dt) {
+            let impactOrigin = state === 'foot' ? player.position : car.position, impactRadius = state === 'foot' ? 1.2 : 2.2, impactForce = state === 'foot' ? 0.0 : 0.8; let time = clock.getElapsedTime();
+            if (approachCooldown > 0) approachCooldown -= dt;
+            if (state === 'foot' && !npcApproaching && approachCooldown <= 0) {
+                let closestDist = 30, closestNpc = null;
+                npcs.forEach(npc => { if (npc.userData.state === 'walking') { let dist = npc.position.distanceTo(player.position); if (dist < closestDist) { closestDist = dist; closestNpc = npc; } } });
+                if (closestNpc) { npcApproaching = closestNpc; closestNpc.userData.state = 'approaching'; }
+            }
+            npcs.forEach(npc => {
+                if (npc.userData.state === 'knocked') { npc.userData.vy -= 0.04; npc.position.y += npc.userData.vy; npc.position.x += npc.userData.vx; npc.position.z += npc.userData.vz; npc.rotation.x += 0.2; npc.rotation.z += 0.15; if (npc.position.y <= 0) { npc.position.y = 0; npc.userData.vy = 0; npc.userData.vx = 0; npc.userData.vz = 0; npc.userData.state = 'walking'; npc.rotation.x = 0; npc.rotation.z = 0; npc.userData.target = new THREE.Vector3(npc.position.x + (Math.random()*40-20), 0, npc.position.z + (Math.random()*40-20)); } } 
+                else if (npc.userData.state === 'stunned') { npc.userData.stunTime -= dt; npc.position.add(npc.userData.knockDir.clone().multiplyScalar(dt * 2)); npc.userData.knockDir.multiplyScalar(0.9); npc.position.y = -0.2 * Math.sin((1.0 - npc.userData.stunTime) * Math.PI); npc.rotation.x = -0.3 * Math.sin((1.0 - npc.userData.stunTime) * Math.PI); if (npc.userData.stunTime <= 0) { npc.userData.state = 'walking'; npc.position.y = 0; npc.rotation.x = 0; } } 
+                else if (npc.userData.state === 'talking') { npc.userData.talkTime -= dt; let p = time * 5; npc.userData.armL.rotation.x = Math.sin(p) * 0.8; npc.userData.armR.rotation.x = -Math.sin(p) * 0.8; if (npc.userData.talkTime <= 0) { npc.userData.state = 'walking'; npc.userData.target = new THREE.Vector3(Math.random() * 150 - 75, 0, Math.random() * 150 - 75); if (npcApproaching === npc) { npcApproaching = null; approachCooldown = 20; } } } 
+                else if (npc.userData.state === 'approaching') { if (state !== 'foot') { npc.userData.state = 'walking'; if (npcApproaching === npc) npcApproaching = null; } else { let dir = new THREE.Vector3().subVectors(player.position, npc.position); dir.y = 0; if (dir.length() < 3) { npc.userData.state = 'talking'; npc.userData.talkTime = 10.0; createDialogue(npcTalkDialogues[Math.floor(Math.random() * npcTalkDialogues.length)], npc); } else { dir.normalize().multiplyScalar(npc.userData.speed * 1.5); npc.position.add(dir); npc.rotation.y = Math.atan2(dir.x, dir.z); let p = time * 6 + npc.userData.walkPhase; npc.userData.legL.rotation.x = Math.sin(p) * 0.5; npc.userData.legR.rotation.x = -Math.sin(p) * 0.5; npc.userData.armL.rotation.x = -Math.sin(p) * 0.5; npc.userData.armR.rotation.x = Math.sin(p) * 0.5; } } } 
+                else { let dir = new THREE.Vector3().subVectors(npc.userData.target, npc.position); dir.y = 0; if (dir.length() < 2) { npc.userData.target.set(npc.position.x + (Math.random()*80-40), 0, npc.position.z + (Math.random()*80-40)); } else { dir.normalize().multiplyScalar(npc.userData.speed); npc.position.add(dir); npc.rotation.y = Math.atan2(dir.x, dir.z); let p = time * 5 + npc.userData.walkPhase; npc.userData.legL.rotation.x = Math.sin(p) * 0.5; npc.userData.legR.rotation.x = -Math.sin(p) * 0.5; npc.userData.armL.rotation.x = -Math.sin(p) * 0.5; npc.userData.armR.rotation.x = Math.sin(p) * 0.5; } }
+                if (npc.userData.state !== 'knocked') npc.position.y = 0;
+                resolveCollisions(npc, 0.5); npc.position.x = Math.max(-CITY_LIMIT, Math.min(CITY_LIMIT, npc.position.x)); npc.position.z = Math.max(-CITY_LIMIT, Math.min(CITY_LIMIT, npc.position.z));
+                let distToImpact = npc.position.distanceTo(impactOrigin); if (distToImpact < impactRadius && impactForce > 0) { let knockDir = new THREE.Vector3().subVectors(npc.position, impactOrigin); knockDir.y = 0; knockDir.normalize(); npc.userData.state = 'knocked'; npc.userData.vy = 0.5 + impactForce; npc.userData.vx = knockDir.x * impactForce; npc.userData.vz = knockDir.z * impactForce; if (npcApproaching === npc) { npcApproaching = null; approachCooldown = 20; } }
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate); let dt = clock.getDelta();
+            updatePlayer(dt); updateCar(dt); updateNPCs(dt); updateDialogues(dt);
+            renderer.render(scene, camera);
+        }
+        function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); }
+        init();
+    </script>
+</body>
+</html>
